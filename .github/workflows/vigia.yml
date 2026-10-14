@@ -1,10 +1,9 @@
 name: Vigia do PC
 
-# O monitor dos sites corre num PC sempre ligado e grava a hora da última
-# verificação na variável PC_HEARTBEAT deste repo. Este workflow confere essa
-# hora: se passar muito tempo sem sinal, o monitor está parado (PC desligado,
-# sem internet, tarefa parada) e os avisos dos sites deixaram de existir.
-# O PC, por seu lado, confere que este workflow tem corrido.
+# O monitor dos sites grava a hora da última verificação na variável
+# PC_HEARTBEAT deste repo. Este workflow confere essa hora: se passar muito
+# tempo sem sinal, o monitor está parado.
+# O monitor, por seu lado, confere que este workflow tem corrido.
 
 on:
   schedule:
@@ -25,7 +24,7 @@ permissions:
   actions: write   # apagar o cache de estado antigo
 
 env:
-  MAX_MIN: 20      # o PC verifica de 5 em 5 min; 20 min sem sinal = parado
+  MAX_MIN: 20      # o monitor verifica de 5 em 5 min; 20 min sem sinal = parado
 
 jobs:
   vigia:
@@ -39,7 +38,7 @@ jobs:
           key: vigia-state-${{ github.run_id }}
           restore-keys: vigia-state-
 
-      - name: Conferir o sinal de vida do PC
+      - name: Conferir o sinal de vida do monitor
         id: v
         env:
           HB: ${{ vars.PC_HEARTBEAT }}
@@ -48,22 +47,22 @@ jobs:
           : > alertas.txt
           antes=$(cat state/pc 2>/dev/null || echo up)
           if [ -z "$HB" ]; then
-            echo "Ainda sem sinal do PC (variável PC_HEARTBEAT por criar)." >> "$GITHUB_STEP_SUMMARY"
+            echo "Ainda sem sinal do monitor (variável PC_HEARTBEAT por criar)." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
           agora=$(date +%s)
           idade=$(( (agora - HB) / 60 ))
           quando=$(TZ=Europe/Lisbon date -d "@$HB" '+%d/%m %H:%M')
-          echo "Último sinal do PC: $quando (há $idade min)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Último sinal do monitor: $quando (há $idade min)" >> "$GITHUB_STEP_SUMMARY"
           if [ "$idade" -gt "$MAX_MIN" ]; then
             echo down > state/pc
             if [ "$antes" != down ]; then
-              echo "🔴 O monitor do PC parou: último sinal às $quando (há $idade min). Os sites não estão a ser vigiados." >> alertas.txt
+              echo "🔴 O monitor parou: último sinal às $quando (há $idade min). Os sites não estão a ser vigiados." >> alertas.txt
               echo "caiu=1" >> "$GITHUB_OUTPUT"
             fi
           else
             echo up > state/pc
-            [ "$antes" = down ] && echo "🟢 O monitor do PC voltou (último sinal às $quando)." >> alertas.txt
+            [ "$antes" = down ] && echo "🟢 O monitor voltou (último sinal às $quando)." >> alertas.txt
           fi
           exit 0
 
@@ -101,8 +100,8 @@ jobs:
             | xargs -r -n1 gh cache delete -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || true
 
       # A execução a vermelho faz o GitHub mandar um email. Só na transição.
-      - name: Falhar se o PC parou agora
+      - name: Falhar se o monitor parou agora
         if: steps.v.outputs.caiu == '1'
         run: |
-          echo "::error::O monitor do PC deixou de dar sinal."
+          echo "::error::O monitor deixou de dar sinal."
           exit 1
